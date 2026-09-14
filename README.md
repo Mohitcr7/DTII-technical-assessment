@@ -11,6 +11,68 @@ that averages those into fluent prose is worse than no system at all, because it
 launders an unratified deviation into "company policy". Everything below follows
 from refusing to do that.
 
+## Architecture
+
+```mermaid
+flowchart TB
+    subgraph U[Human]
+      F[Founder]
+      C[Approval console]
+    end
+
+    subgraph T[Trusted control plane]
+      O[Orchestrator<br/>plans from question + structural metadata only]
+      P[Planner]
+      G[ActionGateway<br/>human authorization]
+      A[(Audit log<br/>hash-chained)]
+    end
+
+    subgraph R[Reasoning over untrusted data]
+      K[KnowledgeService<br/>grounding + evidence discipline]
+      D[DecisionLedger<br/>status, supersession, conflict]
+      X[ContradictionDetector<br/>6 detectors + clustering]
+      S1[Research agent]
+      S2[Red-team agent]
+      S3[Technical agent]
+    end
+
+    subgraph I[Ingestion]
+      L[CorpusLoader]
+      CL[Classifier<br/>FACT/INFERENCE/HYPOTHESIS/DECISION/UNKNOWN]
+      GU[Guards<br/>injection scan + trust propagation]
+      IX[(ClaimIndex<br/>BM25 over claims)]
+    end
+
+    subgraph M[Model layer]
+      RG[ProviderRegistry<br/>role-based routing + failover]
+      MA[Anthropic]
+      MO[OpenAI]
+      MD[Deterministic floor<br/>no network]
+    end
+
+    subgraph TL[Tools]
+      TR[ToolRegistry<br/>capability-scoped]
+      EM[external_email.send<br/>consequential]
+    end
+
+    DOCS[/18 documents<br/>UNTRUSTED DATA/] --> L --> CL --> GU --> IX
+    F --> O --> P
+    O --> K --> IX
+    O --> D
+    O --> X
+    O -->|fixed context, own tool grant| S1 & S2 & S3
+    K & S1 & S2 & S3 --> RG --> MA & MO & MD
+    O -->|prepare only| G --> TR --> EM
+    C -->|credential the agent never holds| G
+    O & G & S1 & S2 & S3 --> A
+
+    style DOCS fill:#4a1a1a,color:#fff
+    style G fill:#1a3a1a,color:#fff
+    style A fill:#1a2a3a,color:#fff
+```
+
+Red: untrusted data. Green: the human authorization boundary. Blue: the audit log. Document text never reaches the planner; the agent can prepare a consequential action but has no code path to execute one. Full walkthrough in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+
 ---
 
 ## Quickstart
