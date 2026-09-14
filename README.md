@@ -148,14 +148,34 @@ event is computed in code and comes out identical without a key. Full transcript
 **2.1 Knowledge retrieval** — cited, labelled, and UNKNOWN when the record is silent:
 
 ```text
+Q: What signing algorithm and key custody boundary do we use?
+verdict: ANSWERED   plan=decision_check provider=anthropic trace=tr_902879d3406749c2
+  [FACT] Veritas Chain uses ECDSA P-256 for all production signing operations.  ['DOC-04#c1']
+  [FACT] The key custody boundary is the custody provider's HSM, where key generation occurs exclusively and private key material never leaves.  ['DOC-04#c2']
+  [DECISION] ColdVault Inc. is designated as the exclusive key-custody provider for all production signing keys.  ['DOC-01#c1']
+  ! DOC-01 is contested by DOC-02.
+  ! DOC-02 is SUPERSEDED by DOC-10 - historical, not current policy.
 
+Q: What is our Series A valuation?
+verdict: UNKNOWN   plan=lookup provider=anthropic trace=tr_9fa9ab9a68164321
+  ? The supplied document set does not contain material that answers this.
+  ? No document in the set mentions the subject of the question.
+  ? To answer it, the corpus would need a record stating this directly.
+  ! Answered UNKNOWN rather than inferring from weakly related material.
 ```
 
 **2.2 Decision retrieval** — governing record, status, rationale, and the conflict
 with what you are proposing:
 
 ```text
+governing : DOC-10 [ACTIVE] board 2026-07-30
+source    : Board Meeting Minutes (excerpt)
+decision  : The board reaffirmed the original vendor strategy: Veritas Chain will maintain ColdVault as its sole, exclusive custody provider going forward, citing cost discipline and integration simplicity. KeyForge integration should be wound down over the next two months.
+rationale : citing cost discipline and integration simplicity
+history   : [('DOC-02', 'SUPERSEDED'), ('DOC-01', 'ACTIVE')]
 
+conflict with your proposal (high):
+  The proposal takes position 'multiple' on how many custody providers hold production signing keys, while DOC-10 (ACTIVE, board, 2026-07-30) holds 'single'. Exclusivity is a cardinality claim about the same function at the same time: 'exclusive provider' means at most one. A second provider running live in production for that same function makes the exclusivity claim false. The two statements are not different words for one arrangement - they describe arrangements that cannot both hold. Adopting the proposal requires reversing DOC-10, which is a decision for board-level authority, not an implementation detail.
 ```
 
 **2.5 Delegation** — the red team leads with governance; the research agent reports
@@ -163,13 +183,34 @@ the superseded rollout as history because the evidence it was handed carried the
 ledger status:
 
 ```text
+redteam  status=ok confidence=0.8 provider=anthropic/claude-haiku-4-5-20251001
+  summary   : The strongest objection is that the board has explicitly reaffirmed ColdVault as the sole, exclusive custody provider, rejecting the dual-provider approach on grounds of cost discipline and integration simplicity. Adding KeyForge would directly contradict this active board decision. Second, custody costs have already ballooned 40% since implementing the dual-provider model, and returning to a single provider was the board's stated rationale for cost control. Third, ColdVault alone has demonstrated sufficient security rigor, passing internal review with no critical findings and maintaining current SOC 2 Type II certification, so the risk-reduction argument for a second provider has been weighed and rejected by governance. Finally, the earlier document recommending KeyForge as secondary provider has been superseded, indicating the organization has already evaluated and decided against this path.
+  finding   : [BLOCKING] The proposal takes position 'multiple' on how many custody providers hold production signing keys, while DOC-10 (ACTIVE, board, 2026-07-30)
+  finding   : [STALE] Cites superseded records: DOC-02#c1 (DOC-02)
+  finding   : [CONTESTED RECORD] The supplied material takes more than one position (['multiple', 'single']). Any answer must say which one governs, not average the
 
+research  status=ok confidence=0.9 provider=anthropic/claude-haiku-4-5-20251001
+  summary   : The record establishes a decision to use ColdVault Inc. as the exclusive custody provider, justified by measured facts that ColdVault passed security review with no critical findings and maintains current SOC 2 Type II certification, despite being 15% more expensive than KeyForge. History shows that KeyForge was briefly added as a secondary provider to reduce single-vendor risk, which increased custody spend by 40%, but this arrangement has been superseded by a board decision to return to ColdVault as the sole provider, citing cost discipline and integration simplicity. The question of whether to add KeyForge is already closed by the record: the current decision is against it.
+  finding   : [DECISION] Decision: Veritas Chain will use ColdVault Inc. as our exclusive key-custody provider for all production signing keys, effective immediatel
+  finding   : [DECISION] The board reaffirmed the original vendor strategy: Veritas Chain will maintain ColdVault as its sole, exclusive custody provider going forw
+  finding   : [FACT] Rationale: ColdVault's HSM cluster passed our internal security review with no critical findings, and their SOC 2 Type II report is current. (D
 ```
 
 **2.6 Human authorization** — prepared, then refused three different ways:
 
 ```text
+prepared  : act_b67625415de1  status=PENDING_HUMAN_AUTHORIZATION
+intent    : Send an external email to compliance@northbridge.example summarising the position of record in response to: "Send Northbridge Bank our current custody position of record". Irreversible once sent.
+hash      : e0fe96cb0aa2d8581062770ede90f48f62c6659dd8d0cd70708502722e2f38da
 
+attempt 1 - the agent tries to approve its own action
+  refused: only a human principal may approve an action
+
+attempt 2 - execute without approval
+  refused: cannot execute: action is PENDING_HUMAN_AUTHORIZATION, not APPROVED
+
+attempt 3 - a human approves, then the payload is tampered with
+  refused: payload changed after approval; execution refused
 ```
 
 **2.7 Audit** — the same interaction, reconstructed:
