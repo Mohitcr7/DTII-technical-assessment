@@ -1,0 +1,271 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Founder Intelligence Agent</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+  :root{--bg:#0f1115;--panel:#161a21;--line:#252b36;--text:#e6e9ef;--dim:#98a2b3;
+        --fact:#4ade80;--decision:#60a5fa;--inference:#fbbf24;--hypothesis:#f472b6;--unknown:#94a3b8;
+        --high:#ef4444;--medium:#f59e0b;--low:#64748b}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font:14px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace}
+  header{padding:14px 20px;border-bottom:1px solid var(--line);display:flex;gap:16px;align-items:baseline;flex-wrap:wrap}
+  h1{font-size:15px;margin:0;letter-spacing:.02em}
+  .dim{color:var(--dim)}
+  nav{display:flex;gap:4px;padding:10px 20px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+  nav button{background:transparent;border:1px solid var(--line);color:var(--dim);padding:5px 12px;
+             border-radius:4px;cursor:pointer;font:inherit}
+  nav button.on{color:var(--text);border-color:#3b82f6;background:#16233a}
+  main{padding:20px;max-width:1100px}
+  section{display:none} section.on{display:block}
+  .row{display:flex;gap:8px;flex-wrap:wrap}
+  input[type=text]{flex:1;min-width:280px;background:var(--panel);border:1px solid var(--line);
+                   color:var(--text);padding:9px 11px;border-radius:4px;font:inherit}
+  button.go{background:#2563eb;border:0;color:#fff;padding:9px 16px;border-radius:4px;cursor:pointer;font:inherit}
+  button.go:disabled{opacity:.5;cursor:wait}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:13px 15px;margin:12px 0}
+  .tag{display:inline-block;padding:1px 7px;border-radius:3px;font-size:11px;border:1px solid currentColor;margin-right:6px}
+  .FACT{color:var(--fact)}.DECISION{color:var(--decision)}.INFERENCE{color:var(--inference)}
+  .HYPOTHESIS{color:var(--hypothesis)}.UNKNOWN{color:var(--unknown)}
+  .high{color:var(--high)}.medium{color:var(--medium)}.low{color:var(--low)}
+  .cite{color:#7dd3fc;font-size:12px}
+  .caveat{color:var(--medium);font-size:12.5px;margin-top:6px}
+  pre{white-space:pre-wrap;word-break:break-word;margin:6px 0;font-size:12.5px;color:var(--dim)}
+  h3{font-size:13px;margin:18px 0 6px;color:var(--dim);text-transform:uppercase;letter-spacing:.08em}
+  .ex{color:#7dd3fc;cursor:pointer;text-decoration:underline dotted;margin-right:14px;font-size:12.5px}
+  .ok{color:var(--fact)} .bad{color:var(--high)}
+  table{border-collapse:collapse;width:100%;font-size:12.5px}
+  td,th{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left;vertical-align:top}
+  .pill{font-size:11px;padding:1px 6px;border-radius:9px;background:#1f2937;color:var(--dim)}
+</style>
+
+<header>
+  <h1>FOUNDER INTELLIGENCE AGENT</h1>
+  <span class="dim" id="status">loading…</span>
+</header>
+
+<nav>
+  <button class="on" data-t="ask">Ask</button>
+  <button data-t="contradictions">Contradictions</button>
+  <button data-t="ledger">Decision ledger</button>
+  <button data-t="actions">Authorization queue</button>
+  <button data-t="audit">Audit</button>
+  <button data-t="security">Security self-test</button>
+</nav>
+
+<main>
+  <section id="ask" class="on">
+    <div class="row">
+      <input type="text" id="q" placeholder="Ask the record…">
+      <button class="go" id="askBtn">Ask</button>
+      <button class="go" id="actBtn" title="Ask and prepare the outbound action">Ask + prepare action</button>
+    </div>
+    <div style="margin-top:10px">
+      <span class="ex">Should we add KeyForge as a second custody provider?</span>
+      <span class="ex">How long do we retain signing logs?</span>
+      <span class="ex">Why are EU customers seeing higher latency?</span>
+      <span class="ex">What did we commit to Northbridge Bank?</span>
+      <span class="ex">What is our Series A valuation?</span>
+    </div>
+    <div id="out"></div>
+  </section>
+
+  <section id="contradictions"></section>
+  <section id="ledger"></section>
+  <section id="actions"></section>
+  <section id="audit"></section>
+  <section id="security">
+    <button class="go" id="stBtn">Run self-test</button>
+    <div id="stOut"></div>
+  </section>
+</main>
+
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+const api = async (p, o) => (await fetch(p, o)).json();
+const post = (p, b) => api(p, {method:'POST', headers:{'content-type':'application/json'}, body:JSON.stringify(b||{})});
+
+document.querySelectorAll('nav button').forEach(b => b.onclick = () => {
+  document.querySelectorAll('nav button').forEach(x => x.classList.remove('on'));
+  document.querySelectorAll('section').forEach(x => x.classList.remove('on'));
+  b.classList.add('on'); $('#'+b.dataset.t).classList.add('on');
+  ({contradictions:loadContradictions, ledger:loadLedger, actions:loadActions, audit:loadAudit}[b.dataset.t]||(()=>{}))();
+});
+document.querySelectorAll('.ex').forEach(e => e.onclick = () => { $('#q').value = e.textContent; ask(false); });
+
+async function boot(){
+  const h = await api('/api/health');
+  $('#status').innerHTML = `${h.documents} docs · ${h.claims} claims · model: <b>${h.active_provider.reason}</b>`
+    + (h.degraded ? ' <span class="pill">no API key — deterministic mode</span>' : '')
+    + ` · audit chain: <span class="${h.audit_chain.ok?'ok':'bad'}">${h.audit_chain.ok?'intact':'BROKEN'}</span>`;
+}
+
+$('#askBtn').onclick = () => ask(false);
+$('#actBtn').onclick = () => ask(true);
+$('#q').onkeydown = e => { if(e.key === 'Enter') ask(false); };
+
+async function ask(prepare){
+  const question = $('#q').value.trim(); if(!question) return;
+  $('#askBtn').disabled = $('#actBtn').disabled = true;
+  $('#out').innerHTML = '<p class="dim">thinking…</p>';
+  try{
+    const r = await post('/api/ask', {question, prepare_action: prepare});
+    $('#out').innerHTML = render(r);
+  } finally { $('#askBtn').disabled = $('#actBtn').disabled = false; }
+}
+
+function seg(s){
+  return `<div style="margin:7px 0"><span class="tag ${s.claim_type}">${s.claim_type}</span>${esc(s.text)}
+    <span class="cite">${s.citations.map(c=>'['+c+']').join(' ')}</span></div>`;
+}
+
+function render(r){
+  let h = `<div class="card"><b>Verdict: ${r.answer.verdict}</b>
+    <span class="pill">plan: ${r.plan.intent}</span>
+    <span class="pill">provider: ${r.provider}</span>
+    <span class="pill">trace: ${r.trace_id}</span>
+    ${r.answer.segments.map(seg).join('')}
+    ${r.answer.missing.map(m=>`<div class="caveat">? ${esc(m)}</div>`).join('')}
+    ${r.answer.caveats.map(c=>`<div class="caveat">! ${esc(c)}</div>`).join('')}
+    <pre>${esc(r.plan.rationale)}</pre></div>`;
+
+  if(r.decision && r.decision.found){
+    const g = r.decision.governing, c = r.decision.proposal_conflict;
+    h += `<h3>Governing decision</h3><div class="card">
+      <b>${g.doc_id} — ${esc(g.title)}</b>
+      <span class="tag ${g.status==='ACTIVE'?'FACT':'UNKNOWN'}">${g.status}</span>
+      <span class="pill">${g.authority}</span><span class="pill">${g.date}</span>
+      <div style="margin-top:6px">${esc(g.decision_text)}</div>
+      ${g.rationale?`<div class="caveat">rationale: ${esc(g.rationale)}</div>`:''}
+      <div class="cite">source: ${esc(g.source)} · claims ${g.claim_ids.join(', ')}</div>
+      ${g.notes.map(n=>`<div class="caveat">· ${esc(n)}</div>`).join('')}
+      ${c && c.conflicts ? `<div class="card" style="border-color:#7f1d1d">
+        <b class="high">CONFLICTS WITH YOUR PROPOSAL (${c.severity})</b>
+        <div style="margin-top:6px">${esc(c.explanation)}</div></div>` :
+        (c?`<div class="caveat">${esc(c.explanation)}</div>`:'')}
+      ${r.decision.history.length?`<h3>History</h3>`+r.decision.history.map(x=>
+        `<div>${x.doc_id} <span class="tag ${x.status==='ACTIVE'?'FACT':'UNKNOWN'}">${x.status}</span>
+         ${esc(x.title)} <span class="dim">${x.date}</span></div>`).join(''):''}
+    </div>`;
+  }
+
+  if(r.contradictions.length){
+    h += `<h3>Contradictions touching this answer</h3>` + r.contradictions.map(cl=>`
+      <div class="card"><b class="${cl.severity}">[${cl.severity}] ${esc(cl.title)}</b>
+        <span class="pill">${cl.documents.join(', ')}</span>
+        <div style="margin-top:8px"><span class="cite">${cl.primary.claim_a.claim_id}</span> ${esc(cl.primary.claim_a.text)}</div>
+        <div><span class="cite">${cl.primary.claim_b.claim_id}</span> ${esc(cl.primary.claim_b.text)}</div>
+        <div style="margin-top:8px"><b>Why they conflict:</b> ${esc(cl.primary.why)}</div>
+        <div style="margin-top:6px"><b>Resolution:</b> ${esc(cl.primary.resolution)}</div>
+        ${cl.current_position?`<div style="margin-top:6px"><b>Today:</b> ${esc(cl.current_position)}</div>`:''}
+        <div class="caveat">detector: ${esc(cl.primary.detector)}${cl.supporting.length?` · +${cl.supporting.length} supporting pair(s)`:''}</div>
+      </div>`).join('');
+  }
+
+  if(r.delegations.length){
+    h += `<h3>Delegated subtasks</h3>` + r.delegations.map(d=>`
+      <div class="card"><b>${d.agent}</b> <span class="pill">${d.status}</span>
+        <span class="pill">confidence ${d.confidence}</span>
+        <span class="pill">${d.provider}/${d.model}</span>
+        <div style="margin-top:6px">${esc(d.summary)}</div>
+        ${d.findings.map(f=>`<div style="margin-top:5px">• ${esc(f)}</div>`).join('')}
+        ${d.refusals.map(f=>`<div class="caveat">refused: ${esc(f)}</div>`).join('')}
+      </div>`).join('');
+  }
+
+  if(r.pending_action) h += `<h3>Prepared action — awaiting human authorization</h3>` + actionCard(r.pending_action);
+  return h;
+}
+
+function actionCard(a){
+  const pending = a.status === 'PENDING_HUMAN_AUTHORIZATION';
+  return `<div class="card" id="act-${a.action_id}">
+    <b class="${pending?'medium':'dim'}">${a.status}</b>
+    <span class="pill">${a.tool}</span><span class="pill">risk: ${a.risk}</span>
+    <div style="margin-top:6px">${esc(a.intent)}</div>
+    <pre>${esc(JSON.stringify(a.payload, null, 2))}</pre>
+    <div class="cite">payload sha256: ${a.payload_hash}</div>
+    <div class="cite">evidence: ${(a.supporting_claim_ids||[]).join(', ') || 'none'}</div>
+    ${(a.warnings||[]).map(w=>`<div class="caveat">! ${esc(w)}</div>`).join('')}
+    ${a.approved_by?`<div class="caveat">approved by ${esc(a.approved_by)} at ${a.approved_at}</div>`:''}
+    ${a.execution_result?`<pre>result: ${esc(JSON.stringify(a.execution_result))}</pre>`:''}
+    ${pending?`<div class="row" style="margin-top:8px">
+      <input type="text" id="tok-${a.action_id}" placeholder="approver token (dev: dev-human-console-token)">
+      <button class="go" onclick="approve('${a.action_id}')">Approve</button>
+      <button class="go" style="background:#7f1d1d" onclick="denyAct('${a.action_id}')">Deny</button>
+    </div>`:''}
+    ${a.status==='APPROVED'?`<button class="go" style="margin-top:8px" onclick="execAct('${a.action_id}')">Execute now</button>`:''}
+  </div>`;
+}
+
+async function approve(id){
+  const token = $('#tok-'+id).value.trim();
+  const r = await fetch(`/api/actions/${id}/approve`, {method:'POST',
+    headers:{'content-type':'application/json','X-Approver-Token':token,'X-Approver-Id':'founder'},
+    body: JSON.stringify({note:'approved from console'})});
+  const j = await r.json();
+  if(!r.ok){ alert('Refused: ' + j.detail); return; }
+  document.querySelector('#act-'+id).outerHTML = actionCard(j); loadActions();
+}
+async function denyAct(id){
+  const j = await post(`/api/actions/${id}/deny`, {reason:'denied from console'});
+  document.querySelector('#act-'+id).outerHTML = actionCard(j); loadActions();
+}
+async function execAct(id){
+  const r = await fetch(`/api/actions/${id}/execute`, {method:'POST'});
+  const j = await r.json();
+  if(!r.ok){ alert('Refused: ' + j.detail); return; }
+  document.querySelector('#act-'+id).outerHTML = actionCard(j);
+}
+
+async function loadContradictions(){
+  const d = await api('/api/contradictions?detail=true');
+  $('#contradictions').innerHTML = `<p class="dim">${d.cluster_count} issue(s) from ${d.finding_count} conflicting pair(s).</p>`
+    + d.clusters.map(cl=>`<div class="card">
+      <b class="${cl.severity}">[${cl.severity}] ${esc(cl.title)}</b> <span class="pill">${cl.documents.join(', ')}</span>
+      <div style="margin-top:8px"><span class="cite">${cl.primary.claim_a.claim_id}</span> ${esc(cl.primary.claim_a.text)}</div>
+      <div><span class="cite">${cl.primary.claim_b.claim_id}</span> ${esc(cl.primary.claim_b.text)}</div>
+      <div style="margin-top:8px"><b>Why:</b> ${esc(cl.primary.why)}</div>
+      <div style="margin-top:6px"><b>Resolution:</b> ${esc(cl.primary.resolution)}</div>
+      ${cl.current_position?`<div style="margin-top:6px"><b>Today:</b> ${esc(cl.current_position)}</div>`:''}
+      <div class="caveat">kind: ${cl.primary.kind} · detector: ${esc(cl.primary.detector)} · confidence ${cl.primary.confidence}</div>
+      ${cl.supporting.map(s=>`<div class="caveat">also: ${s.claim_a.claim_id} ↔ ${s.claim_b.claim_id} (${s.kind})</div>`).join('')}
+    </div>`).join('');
+}
+
+async function loadLedger(){
+  const d = await api('/api/ledger');
+  $('#ledger').innerHTML = `<table><tr><th>Doc</th><th>Status</th><th>Authority</th><th>Date</th><th>Notes</th></tr>`
+    + d.entries.map(e=>`<tr><td>${e.doc_id}<br><span class="dim">${esc(e.title)}</span></td>
+      <td class="${e.status==='ACTIVE'?'ok':''}">${e.status}</td><td>${e.authority}</td><td>${e.date}</td>
+      <td>${e.notes.map(esc).join('<br>')||'<span class="dim">—</span>'}</td></tr>`).join('') + `</table>`;
+}
+
+async function loadActions(){
+  const d = await api('/api/actions');
+  $('#actions').innerHTML = d.actions.length
+    ? d.actions.map(actionCard).join('')
+    : '<p class="dim">No actions prepared yet. Use “Ask + prepare action” on the Ask tab.</p>';
+}
+
+async function loadAudit(){
+  const [v, r] = await Promise.all([api('/api/audit/verify'), api('/api/audit/recent?limit=40')]);
+  $('#audit').innerHTML = `<div class="card">chain: <b class="${v.ok?'ok':'bad'}">${v.ok?'INTACT':'BROKEN'}</b>
+    <span class="pill">${v.records} records</span><span class="pill">head ${String(v.head||'').slice(0,16)}…</span></div>`
+    + `<table><tr><th>#</th><th>event</th><th>actor</th><th>trace</th><th>payload</th></tr>`
+    + r.entries.slice().reverse().map(e=>`<tr><td>${e.seq}</td><td>${e.event}</td><td>${e.actor}</td>
+      <td class="dim">${e.trace_id}</td><td><pre>${esc(JSON.stringify(e.payload).slice(0,240))}</pre></td></tr>`).join('')
+    + `</table>`;
+}
+
+$('#stBtn').onclick = async () => {
+  $('#stOut').innerHTML = '<p class="dim">running…</p>';
+  const d = await post('/api/security/selftest');
+  $('#stOut').innerHTML = `<div class="card"><b class="${d.all_passed?'ok':'bad'}">${d.passed}/${d.total} controls passed</b>
+    <div class="caveat">${esc(d.note)}</div></div>`
+    + d.checks.map(c=>`<div class="card"><b class="${c.passed?'ok':'bad'}">${c.passed?'PASS':'FAIL'}</b> ${esc(c.control)}
+      <pre>${esc(c.detail)}</pre></div>`).join('');
+};
+
+boot();
+</script>
