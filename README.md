@@ -73,6 +73,26 @@ flowchart TB
 
 Red: untrusted data. Green: the human authorization boundary. Blue: the audit log. Document text never reaches the planner; the agent can prepare a consequential action but has no code path to execute one. Full walkthrough in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
+## Where each assessment requirement is answered
+
+| Assessment section | Where |
+|---|---|
+| §2.1 Knowledge retrieval | `founder_agent/knowledge.py`, `retrieval.py` · demo §2.1 · `tests/test_grounding.py` |
+| §2.2 Decision retrieval | `founder_agent/decisions.py` · demo §2.2 · `tests/test_decisions.py` |
+| §2.3 Contradiction detection | `founder_agent/contradictions.py`, `stance.py` · [table below](#contradictions-found-in-the-supplied-set) · `tests/test_contradictions.py` |
+| §2.4 Classification | `founder_agent/classify.py` · demo §2.4 · `tests/test_classification.py` |
+| §2.5 Agent delegation | `founder_agent/agents/` · demo §2.5 · `tests/test_hosted_path.py` |
+| §2.6 Human authorization | `founder_agent/authorization.py`, `tools/` · demo §2.6 · `tests/test_authorization.py` |
+| §2.7 Auditability | `founder_agent/audit.py` · demo §2.7 · `tests/test_audit.py` |
+| §3 Security exercise | [docs/THREAT_MODEL.md](docs/THREAT_MODEL.md) · `tests/test_security.py` · live `POST /api/security/selftest` |
+| §4 Architecture question (provider swap) | [docs/ARCHITECTURE.md §4](docs/ARCHITECTURE.md#4-changing-model-providers) · `founder_agent/llm/` |
+| §5 Final question (never autonomously) | [docs/AUTONOMY_BOUNDARY.md](docs/AUTONOMY_BOUNDARY.md) |
+| §6 Working prototype | `./run.sh demo` (no key needed) · `./run.sh serve` · [docs/DEMO_TRANSCRIPT.md](docs/DEMO_TRANSCRIPT.md) |
+| §6 Architecture diagram | [above](#architecture) · [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) (with plain-text fallback) |
+| §6 Threat model | [docs/THREAT_MODEL.md](docs/THREAT_MODEL.md) |
+| §6 Known limitations | [docs/LIMITATIONS.md](docs/LIMITATIONS.md) |
+| §6 Next three engineering steps | [docs/LIMITATIONS.md → next steps](docs/LIMITATIONS.md#recommended-next-three-engineering-steps) |
+
 ---
 
 ## Quickstart
