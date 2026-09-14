@@ -138,39 +138,59 @@ API keys from its environment so it never spends money.
 
 ---
 
-## What it looks like in practice
+## What it looks like in practice — live on `claude-haiku-4-5`
 
-Ask: *"Should we add KeyForge as a second custody provider?"*
+Real output from `./run.sh demo` with a key set. Everything in **prose** below is
+model-written; every citation, label, status, conflict verdict, refusal and audit
+event is computed in code and comes out identical without a key. Full transcript:
+[docs/DEMO_TRANSCRIPT.md](docs/DEMO_TRANSCRIPT.md).
+
+**2.1 Knowledge retrieval** — cited, labelled, and UNKNOWN when the record is silent:
+
+```text
 
 ```
-verdict: PARTIAL   plan=proposal_review provider=deterministic
 
-governing decision: DOC-10 [ACTIVE] board 2026-07-30
-  The board reaffirmed the original vendor strategy: Veritas Chain will maintain
-  ColdVault as its sole, exclusive custody provider going forward...
+**2.2 Decision retrieval** — governing record, status, rationale, and the conflict
+with what you are proposing:
 
-  CONFLICT (high): The proposal takes position 'multiple' on how many custody
-  providers hold production signing keys, while DOC-10 (ACTIVE, board, 2026-07-30)
-  holds 'single'. Exclusivity is a cardinality claim about the same function at the
-  same time... Adopting the proposal requires reversing DOC-10, which is a decision
-  for board-level authority, not an implementation detail.
+```text
 
-delegated -> redteam (blocking)
-  • [BLOCKING] ...conflicts with DOC-10...
-  • [STALE] Cites superseded records: DOC-02#c1 (DOC-02)
-  • [CONTESTED RECORD] The supplied material takes more than one position
-    (['multiple', 'single']). Any answer must say which one governs, not average them.
-
-contradiction: [high] How many custody providers govern production signing keys
-contradiction: [high] Production changed without a decision record
 ```
 
-The last line is the finding that matters most and the one a similarity-search
-system cannot produce: DOC-02 changed production while stating that *no decision
-document was filed*. That is not two documents disagreeing — it is the operating
-state diverging from the decision log with nothing revoking it.
+**2.5 Delegation** — the red team leads with governance; the research agent reports
+the superseded rollout as history because the evidence it was handed carried the
+ledger status:
 
----
+```text
+
+```
+
+**2.6 Human authorization** — prepared, then refused three different ways:
+
+```text
+
+```
+
+**2.7 Audit** — the same interaction, reconstructed:
+
+```text
+trace tr_21b270bc95334b54: 7 events
+  #522  05:11:25  founder                      user_request
+  #523  05:11:27  retrieval                    retrieval
+  #524  05:11:27  knowledge_service            model_call
+  #525  05:11:27  orchestrator                 plan
+  #526  05:11:30  redteam                      delegation
+  #527  05:11:33  research                     delegation
+  #528  05:11:33  orchestrator                 response
+
+chain verification: {'ok': True, 'records': 540, 'head': 'aa2edba09ab917dbe2a5bd50163a0a9cabb0d3fc53e2f955529a680ccf80d822'}
+```
+
+The most important line in the whole run is in §2.3 below: DOC-02 changed
+production while stating that *no decision document was filed*. That is not two
+documents disagreeing — it is the operating state diverging from the decision log
+with nothing revoking it, and a similarity-search system cannot produce it.
 
 ## Contradictions found in the supplied set
 
