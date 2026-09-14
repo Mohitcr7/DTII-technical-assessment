@@ -30,7 +30,12 @@ from .stance import stances_of
 
 _INFORMAL = re.compile(
     r"no formal decision document was filed|no decision (document )?was (filed|made)", re.I)
-_RATIONALE = re.compile(r"\b(rationale\s*:|citing|on the grounds|to meet|justifies)\b", re.I)
+# A rationale is either its own sentence ("Rationale: ...") or a clause riding
+# inside the decision sentence ("...citing cost discipline"). Both are captured;
+# the standalone form wins when present.
+_RATIONALE_LINE = re.compile(r"^\s*rationale\s*:\s*(.+)$", re.I | re.S)
+_RATIONALE_CLAUSE = re.compile(
+    r"\b(citing|on the grounds that|to meet|because|in order to|justif\w+)\b.*", re.I | re.S)
 
 
 class DecisionLedger:
@@ -53,11 +58,7 @@ class DecisionLedger:
 
             body = decision_claims or [c for c in doc.claims if stances_of(c)] or doc.claims[:1]
             decision_text = " ".join(c.text for c in body)
-            rationale = next(
-                (c.text for c in doc.claims
-                 if _RATIONALE.search(c.text) and c.text not in decision_text),
-                None,
-            )
+            rationale = self._extract_rationale(doc.claims, body)
             self.entries[doc.doc_id] = GoverningDecision(
                 doc_id=doc.doc_id,
                 title=doc.title,
@@ -73,6 +74,27 @@ class DecisionLedger:
             )
 
         self._resolve_statuses()
+
+    @staticmethod
+    def _extract_rationale(claims, decision_claims) -> str | None:
+        decision_ids = {c.claim_id for c in decision_claims}
+        # 1. A standalone rationale sentence anywhere in the document.
+        for c in claims:
+            m = _RATIONALE_LINE.match(c.text)
+            if m:
+                return m.group(1).strip()
+        # 2. A justification clause embedded in the decision sentence itself.
+        for c in decision_claims:
+            m = _RATIONALE_CLAUSE.search(c.text)
+            if m:
+                return m.group(0).strip().rstrip(".")
+        # 3. Any other sentence in the document that reads as justification.
+        for c in claims:
+            if c.claim_id in decision_ids:
+                continue
+            if _RATIONALE_CLAUSE.search(c.text):
+                return c.text
+        return None
 
     def _resolve_statuses(self) -> None:
         # 1. Markers the corpus states outright always win.

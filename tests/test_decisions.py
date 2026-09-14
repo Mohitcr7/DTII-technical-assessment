@@ -41,3 +41,12 @@ def test_proposal_conflicting_with_the_record_is_flagged(system):
 def test_unrelated_question_does_not_manufacture_a_conflict(system):
     response = system.orchestrator.ask("What is our API rate limit?")
     assert response.decision is None or not response.decision.proposal_conflict.conflicts
+
+
+def test_every_active_decision_exposes_its_rationale(system):
+    """§2.2 asks for the rationale. DOC-10 and DOC-14 carry theirs inline."""
+    for doc_id in ("DOC-01", "DOC-10", "DOC-14"):
+        assert system.ledger.entries[doc_id].rationale, doc_id
+    assert "cost discipline" in system.ledger.entries["DOC-10"].rationale
+    assert "regulatory" in system.ledger.entries["DOC-14"].rationale
+    assert "SOC 2" in system.ledger.entries["DOC-01"].rationale

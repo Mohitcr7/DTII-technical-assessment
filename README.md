@@ -97,7 +97,7 @@ Run the web UI:
 Run the tests, including the attacks against our own controls:
 
 ```bash
-.venv/bin/python -m pytest tests -q            # 62 tests
+.venv/bin/python -m pytest tests -q            # 72 tests
 ```
 
 **No API key is required.** With `ANTHROPIC_API_KEY` or `OPENAI_API_KEY` set, the
@@ -107,6 +107,11 @@ extractively from the source sentences. Retrieval, classification, the decision
 ledger, contradiction detection, delegation and every authorization control are
 identical either way, because none of them live in a prompt. See
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#4-changing-model-providers).
+
+The hosted path is covered by `tests/test_hosted_path.py` with a scripted fake
+provider: model output that cites real claims is used; uncited or fabricated
+sentences are dropped; a confidently-worded restatement of a hypothesis stays
+labelled HYPOTHESIS; a provider failure trips failover to the local floor.
 
 ---
 
@@ -238,5 +243,5 @@ founder_agent/
   tools/                  capability-scoped tool registry
   api.py / cli.py         HTTP and terminal surfaces
 ui/index.html             single-file console
-tests/                    62 tests, including attacks on our own controls
+tests/                    72 tests, including attacks on our own controls
 ```
