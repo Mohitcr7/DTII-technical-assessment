@@ -22,8 +22,12 @@ class Message:
 class LLMRequest:
     system: str
     messages: list[Message]
-    max_tokens: int = 1024
-    temperature: float = 0.0
+    max_tokens: int = 4096
+    #: Reasoning depth for providers that support it ("low" .. "max"). Left
+    #: unset, the provider default applies. Sampling temperature is deliberately
+    #: not part of the contract: current Claude models reject it, and a
+    #: provider-neutral interface should not carry one vendor's knobs.
+    effort: str | None = None
     #: When set, the provider must return JSON conforming to this shape.
     json_schema: dict[str, Any] | None = None
     #: Tool names the caller is permitted to use. Providers must not invent

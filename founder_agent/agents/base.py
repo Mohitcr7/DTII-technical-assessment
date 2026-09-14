@@ -91,10 +91,13 @@ class SubAgent(ABC):
             return "", "deterministic", "rule-engine-v1", 0
         context = "\n\n".join(wrap_untrusted(c.claim_id, f"[{c.claim_type.value}] {c.text}")
                               for c in claims[:12])
+        # Subordinates run at low effort: their structural work is done in
+        # code, the model adds a second opinion and phrasing.
         response = self.registry.complete(role, LLMRequest(
             system=system,
             messages=[Message("user", f"{prompt}\n\nEvidence:\n{context}")],
-            max_tokens=min(budget, 900),
+            max_tokens=max(budget, 2048),
+            effort="low",
         ))
         if response.error:
             return "", response.provider, response.model, 0

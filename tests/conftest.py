@@ -1,9 +1,16 @@
 from __future__ import annotations
 
+import os
 import shutil
 from pathlib import Path
 
 import pytest
+
+# The suite must never spend money or depend on the network. Live-provider
+# checks live in tests/test_live.py and opt in with FA_LIVE=1.
+if os.environ.get("FA_LIVE") != "1":
+    for _k in ("ANTHROPIC_API_KEY", "OPENAI_API_KEY"):
+        os.environ.pop(_k, None)
 
 from founder_agent.app import build_system
 from founder_agent.config import ROOT, Settings

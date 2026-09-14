@@ -108,10 +108,19 @@ ledger, contradiction detection, delegation and every authorization control are
 identical either way, because none of them live in a prompt. See
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#4-changing-model-providers).
 
-The hosted path is covered by `tests/test_hosted_path.py` with a scripted fake
-provider: model output that cites real claims is used; uncited or fabricated
-sentences are dropped; a confidently-worded restatement of a hypothesis stays
-labelled HYPOTHESIS; a provider failure trips failover to the local floor.
+The hosted path is covered two ways. `tests/test_hosted_path.py` uses a scripted
+fake provider (no network): model output that cites real claims is used; uncited or
+fabricated sentences are dropped; a confidently-worded restatement of a hypothesis
+stays labelled HYPOTHESIS; a provider failure trips failover to the local floor.
+`tests/test_live.py` runs the same guarantees against the real API and is opt-in:
+
+```bash
+FA_LIVE=1 .venv/bin/python -m pytest tests/test_live.py -q -s
+```
+
+Default hosted model is `claude-opus-5`; override with `FA_ANTHROPIC_MODEL`. Put the
+key in `.env` (gitignored) — `run.sh` loads it. The ordinary test suite strips any
+API keys from its environment so it never spends money.
 
 ---
 

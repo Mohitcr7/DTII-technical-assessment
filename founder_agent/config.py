@@ -43,7 +43,7 @@ class Settings:
         "redteam": _split(os.environ.get("FA_ROUTE_REDTEAM", "anthropic,openai,deterministic")),
     })
 
-    anthropic_model: str = os.environ.get("FA_ANTHROPIC_MODEL", "claude-sonnet-5")
+    anthropic_model: str = os.environ.get("FA_ANTHROPIC_MODEL", "claude-opus-5")
     openai_model: str = os.environ.get("FA_OPENAI_MODEL", "gpt-4.1")
 
     # Human authorization

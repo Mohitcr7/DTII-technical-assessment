@@ -3,6 +3,12 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
+# Load local secrets if present. .env is gitignored and never read by the app
+# itself - only exported into this process's environment.
+if [ -f .env ]; then
+  set -a; . ./.env; set +a
+fi
+
 if [ ! -d .venv ]; then
   echo "==> creating virtualenv"
   python3 -m venv .venv

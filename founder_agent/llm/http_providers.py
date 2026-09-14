@@ -41,9 +41,18 @@ def _extract_json(text: str) -> dict | None:
 
 
 class AnthropicProvider:
+    """Messages API over plain HTTP.
+
+    Request shape follows the current API: no sampling parameters (rejected by
+    Claude Opus 5 / Sonnet 5), thinking left at the model's adaptive default,
+    depth steered through `output_config.effort`. A `refusal` stop reason is
+    surfaced as an error so the router can fail over rather than hand an
+    empty answer to the caller.
+    """
+
     name = "anthropic"
 
-    def __init__(self, model: str = "claude-sonnet-5") -> None:
+    def __init__(self, model: str = "claude-opus-5") -> None:
         self.model = model
 
     def available(self) -> bool:
@@ -53,13 +62,14 @@ class AnthropicProvider:
         key = os.environ.get("ANTHROPIC_API_KEY")
         if not key:
             return LLMResponse("", self.name, self.model, error="missing ANTHROPIC_API_KEY")
-        body = {
+        body: dict[str, Any] = {
             "model": self.model,
             "max_tokens": request.max_tokens,
-            "temperature": request.temperature,
             "system": request.system + _schema_instruction(request.json_schema),
             "messages": [{"role": m.role, "content": m.content} for m in request.messages],
         }
+        if request.effort:
+            body["output_config"] = {"effort": request.effort}
         try:
             r = httpx.post(
                 "https://api.anthropic.com/v1/messages",
@@ -78,13 +88,19 @@ class AnthropicProvider:
 
         text = "".join(b.get("text", "") for b in data.get("content", []) if b.get("type") == "text")
         usage = data.get("usage", {})
+        stop = data.get("stop_reason", "end_turn")
+        if stop == "refusal":
+            details = data.get("stop_details") or {}
+            return LLMResponse("", self.name, data.get("model", self.model),
+                               stop_reason=stop,
+                               error=f"model refused ({details.get('category')})")
         return LLMResponse(
             text=text,
             provider=self.name,
             model=data.get("model", self.model),
             input_tokens=usage.get("input_tokens", 0),
             output_tokens=usage.get("output_tokens", 0),
-            stop_reason=data.get("stop_reason", "end_turn"),
+            stop_reason=stop,
             structured=_extract_json(text) if request.json_schema else None,
         )
 
@@ -104,7 +120,6 @@ class OpenAIProvider:
             return LLMResponse("", self.name, self.model, error="missing OPENAI_API_KEY")
         body: dict[str, Any] = {
             "model": self.model,
-            "temperature": request.temperature,
             "max_tokens": request.max_tokens,
             "messages": [{"role": "system", "content": request.system + _schema_instruction(request.json_schema)}]
             + [{"role": m.role, "content": m.content} for m in request.messages],
