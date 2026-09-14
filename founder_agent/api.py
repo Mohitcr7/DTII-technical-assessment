@@ -71,6 +71,58 @@ def health() -> dict[str, Any]:
     }
 
 
+@app.get("/api/overview")
+def overview() -> dict[str, Any]:
+    """Everything the landing view needs in one call."""
+    from collections import Counter
+    types = Counter(c.claim_type.value for c in system.claims)
+    clusters = system.detector.cluster()
+    ledger = list(system.ledger.entries.values())
+    statuses = Counter(e.status.value for e in ledger)
+    return {
+        "documents": len(system.documents),
+        "claims": len(system.claims),
+        "claim_types": dict(types),
+        "contradiction_clusters": len(clusters),
+        "contradiction_pairs": sum(1 + len(c.supporting) for c in clusters),
+        "contradictions_by_severity": dict(Counter(c.severity for c in clusters)),
+        "ledger_entries": len(ledger),
+        "ledger_statuses": dict(statuses),
+        "governing_now": [
+            {"doc_id": e.doc_id, "title": e.title, "authority": e.authority.value,
+             "date": str(e.date)}
+            for e in ledger if e.status.value == "ACTIVE"
+        ],
+        "agents": [
+            {"role": a.role, "description": a.description, "tools": sorted(a.granted_tools)}
+            for a in system.orchestrator.subagents.values()
+        ],
+        "pending_actions": len(system.gateway.pending()),
+        "audit_records": system.audit.verify().get("records", 0),
+        "active_provider": system.registry.active_provider("reason"),
+        "active_model": system.registry.status()[system.registry.active_provider("reason")]["model"],
+    }
+
+
+@app.get("/api/audit/traces")
+def audit_traces(limit: int = 30) -> dict[str, Any]:
+    """Distinct interactions, newest first, for the trace picker."""
+    seen: dict[str, dict[str, Any]] = {}
+    for e in system.audit.entries():
+        t = e.get("trace_id")
+        if not t or t in {"selftest", "test-trace", "unknown"}:
+            continue
+        rec = seen.setdefault(t, {"trace_id": t, "ts": e["ts"], "question": None,
+                                  "events": 0, "action": False})
+        rec["events"] += 1
+        if e["event"] == "user_request":
+            rec["question"] = e["payload"].get("question")
+        if e["event"] in {"action_prepared", "action_approved", "action_executed"}:
+            rec["action"] = True
+    traces = sorted(seen.values(), key=lambda r: r["ts"], reverse=True)
+    return {"traces": traces[:limit]}
+
+
 @app.post("/api/ask")
 def ask(req: AskRequest) -> dict[str, Any]:
     if not req.question.strip():

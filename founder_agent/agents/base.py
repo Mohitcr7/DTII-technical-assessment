@@ -65,6 +65,7 @@ class SubAgent(ABC):
         result.task = request.task
 
         self.audit.record("delegation", trace_id=request.parent_trace_id, actor=self.role, payload={
+            "agent": self.role,
             "task": request.task,
             "context_claim_ids": request.context_claim_ids,
             "granted_tools": sorted(self.granted_tools),

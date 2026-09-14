@@ -181,6 +181,22 @@ that gate is asserted in `tests/test_contradictions.py`.
 
 ---
 
+## The console
+
+`./run.sh serve` → http://127.0.0.1:8000. Single HTML file, no build step, no CDN.
+
+| Tab | Shows |
+|---|---|
+| **Ask** | Landing overview (claim-type distribution, what governs today, contradiction counts). After a question: verdict, labelled segments with clickable citations, retrieved evidence with scores and currency notes, governing decision + history timeline, plan → delegation pipeline with each subagent's findings, contradictions touching the answer, and any prepared action. |
+| **Documents** | All 18 documents; every claim with its label, the trigger phrase that produced it, and confidence. |
+| **Decisions** | The ledger — status, authority, rationale, lineage — and a timeline. |
+| **Contradictions** | The five issues, each with why the positions conflict, the resolution, and what governs today. |
+| **Authorization** | Pending actions with payload hash, evidence, warnings; approve / deny / execute. A wrong credential shows the gateway's refusal inline. |
+| **Audit** | Chain status; pick any interaction and see it reconstructed as the seven fields §2.7 asks for. |
+| **Security** | Runs the eight-control self-test against live code paths. |
+
+Any citation chip opens the source document in a drawer with the cited claim highlighted.
+
 ## Documentation
 
 - **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** — component diagram, data flow, and the answer to §4 (swapping model providers, adding email/calendar/GitHub/local models).
