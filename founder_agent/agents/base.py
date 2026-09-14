@@ -16,14 +16,18 @@ explicit:
 
 from __future__ import annotations
 
+import re
 import time
 from abc import ABC, abstractmethod
 
 from ..audit import AuditLog
-from ..guards import wrap_untrusted
+from ..guards import evidence_line, wrap_untrusted
 from ..llm.base import LLMRequest, Message
 from ..llm.registry import ProviderRegistry
 from ..schemas import Claim, DelegationRequest, DelegationResult
+
+
+_LABEL_TOKEN = re.compile(r"\[(FACT|DECISION|INFERENCE|HYPOTHESIS|UNKNOWN)\]\s*")
 
 
 class SubAgent(ABC):
@@ -32,9 +36,10 @@ class SubAgent(ABC):
     #: Tools this role may use. Deliberately narrow; see tools/registry.py.
     granted_tools: frozenset[str] = frozenset({"corpus.search"})
 
-    def __init__(self, registry: ProviderRegistry, audit: AuditLog) -> None:
+    def __init__(self, registry: ProviderRegistry, audit: AuditLog, ledger=None) -> None:
         self.registry = registry
         self.audit = audit
+        self.ledger = ledger
 
     # ------------------------------------------------------------------
     def run(self, request: DelegationRequest, claims: list[Claim]) -> DelegationResult:
@@ -89,8 +94,15 @@ class SubAgent(ABC):
         """Optional model assist. Returns (text, provider, model, tokens)."""
         if self.registry.active_provider(role) == "deterministic":
             return "", "deterministic", "rule-engine-v1", 0
-        context = "\n\n".join(wrap_untrusted(c.claim_id, f"[{c.claim_type.value}] {c.text}")
-                              for c in claims[:12])
+        entries = getattr(self.ledger, "entries", {}) or {}
+        lines = []
+        for c in claims[:12]:
+            entry = entries.get(c.doc_id)
+            lines.append(wrap_untrusted(c.claim_id, evidence_line(
+                c.claim_type.value, c.text,
+                entry.status.value if entry else None,
+                entry.superseded_by if entry else None)))
+        context = "\n\n".join(lines)
         # Subordinates run at low effort: their structural work is done in
         # code, the model adds a second opinion and phrasing.
         response = self.registry.complete(role, LLMRequest(
@@ -101,4 +113,8 @@ class SubAgent(ABC):
         ))
         if response.error:
             return "", response.provider, response.model, 0
-        return response.text, response.provider, response.model, response.total_tokens
+        # Models copy the evidence's bracketed labels into prose. Strip them:
+        # the label belongs on the claim, not inside a sentence about it.
+        text = _LABEL_TOKEN.sub("", response.text)
+        text = re.sub(r"\s{2,}", " ", text).strip()
+        return text, response.provider, response.model, response.total_tokens

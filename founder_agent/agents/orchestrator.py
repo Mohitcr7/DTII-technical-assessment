@@ -66,9 +66,9 @@ class Orchestrator:
         self.gateway = gateway
         self.claims: list[Claim] = index.claims
         self.subagents: dict[str, SubAgent] = {
-            "research": ResearchAgent(registry, audit),
+            "research": ResearchAgent(registry, audit, ledger),
             "redteam": RedTeamAgent(registry, audit, ledger),
-            "technical": TechnicalAgent(registry, audit),
+            "technical": TechnicalAgent(registry, audit, ledger),
         }
         self._clusters = detector.cluster()
 

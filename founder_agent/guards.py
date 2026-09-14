@@ -99,3 +99,18 @@ def wrap_untrusted(claim_id: str, text: str) -> str:
 
 def strip_control_chars(text: str) -> str:
     return _CONTROL_CHARS.sub("", text)
+
+
+def evidence_line(claim_type: str, text: str, ledger_status: str | None = None,
+                  superseded_by: str | None = None) -> str:
+    """What a model sees for one claim: label, ledger status, text.
+
+    The status annotation is the point. A model reasoning over a superseded
+    record without being told it is superseded will re-litigate a question the
+    institution has already closed.
+    """
+    prefix = f"[{claim_type}]"
+    if ledger_status and ledger_status != "ACTIVE":
+        prefix += f" [record status: {ledger_status}"
+        prefix += f" by {superseded_by}]" if superseded_by else "]"
+    return f"{prefix} {text}"

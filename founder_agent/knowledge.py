@@ -19,7 +19,8 @@ import re
 
 from .config import Settings, settings as default_settings
 from .decisions import DecisionLedger
-from .guards import wrap_untrusted
+from .guards import evidence_line, wrap_untrusted
+from .ingest import split_sentences
 from .llm.base import LLMRequest, Message
 from .llm.registry import ProviderRegistry
 from .retrieval import ClaimIndex
@@ -122,8 +123,10 @@ class KnowledgeService:
         if self.registry.active_provider(role) == "deterministic":
             return self._extractive(evidence), True, floor
 
-        context = "\n\n".join(wrap_untrusted(e.claim_id, f"[{e.claim_type.value}] {e.text}")
-                              for e in evidence)
+        context = "\n\n".join(
+            wrap_untrusted(e.claim_id, evidence_line(e.claim_type.value, e.text,
+                                                    *self._ledger_status(e.doc_id)))
+            for e in evidence)
         response = self.registry.complete(role, LLMRequest(
             system=_SYNTHESIS_SYSTEM,
             messages=[Message("user", f"Question: {question}\n\nClaims:\n{context}")],
@@ -185,15 +188,21 @@ class KnowledgeService:
         """Drop anything the evidence does not actually support."""
         allowed = {e.claim_id: e for e in evidence}
         segments: list[AnswerSegment] = []
-        for raw in [s.strip() for s in re.split(r"(?<=[.!?])\s+", text) if s.strip()]:
+        # Same abbreviation-aware splitter as ingestion, so "ColdVault Inc."
+        # does not shear a sentence in half and drop its subject.
+        for raw in split_sentences(text):
             cited = [c for c in _CITATION.findall(raw) if c in allowed]
             if not cited:
                 continue                      # uncited sentence: not shown, not kept
             support = {allowed[c].claim_type for c in cited}
             # The label of an answer segment is the *weakest* thing holding it
-            # up. This is what stops a hypothesis being laundered into a fact.
-            if support & FACTUAL_SUPPORT and not (support - FACTUAL_SUPPORT):
-                label = ClaimType.DECISION if ClaimType.DECISION in support else ClaimType.FACT
+            # up. This is what stops a hypothesis being laundered into a fact,
+            # and a sentence that leans on both a decision and an operating
+            # fact is labelled FACT - it is not itself the decision.
+            if support == {ClaimType.DECISION}:
+                label = ClaimType.DECISION
+            elif support <= FACTUAL_SUPPORT:
+                label = ClaimType.FACT
             elif ClaimType.HYPOTHESIS in support:
                 label = ClaimType.HYPOTHESIS
             elif ClaimType.INFERENCE in support:
@@ -204,6 +213,12 @@ class KnowledgeService:
             clean = re.sub(r"\s{2,}", " ", clean).strip()
             segments.append(AnswerSegment(text=clean, claim_type=label, citations=cited))
         return segments
+
+    def _ledger_status(self, doc_id: str) -> tuple[str | None, str | None]:
+        entry = self.ledger.entries.get(doc_id)
+        if entry is None:
+            return None, None
+        return entry.status.value, entry.superseded_by
 
     # ------------------------------------------------------------------
     def _annotate(self, evidence: list[Evidence]) -> list[Evidence]:
