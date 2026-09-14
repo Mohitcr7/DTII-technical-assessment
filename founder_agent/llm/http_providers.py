@@ -27,6 +27,16 @@ def _schema_instruction(schema: dict[str, Any] | None) -> str:
     )
 
 
+#: Models that accept `output_config.effort`. Haiku 4.5 and older models return
+#: 400 on it, so the knob is only sent where the model understands it.
+_EFFORT_CAPABLE = ("claude-opus-5", "claude-opus-4-6", "claude-opus-4-7", "claude-opus-4-8",
+                   "claude-sonnet-5", "claude-sonnet-4-6", "claude-fable-")
+
+
+def _supports_effort(model: str) -> bool:
+    return model.startswith(_EFFORT_CAPABLE)
+
+
 def _extract_json(text: str) -> dict | None:
     text = text.strip()
     if text.startswith("```"):
@@ -52,7 +62,7 @@ class AnthropicProvider:
 
     name = "anthropic"
 
-    def __init__(self, model: str = "claude-opus-5") -> None:
+    def __init__(self, model: str = "claude-haiku-4-5") -> None:
         self.model = model
 
     def available(self) -> bool:
@@ -68,7 +78,7 @@ class AnthropicProvider:
             "system": request.system + _schema_instruction(request.json_schema),
             "messages": [{"role": m.role, "content": m.content} for m in request.messages],
         }
-        if request.effort:
+        if request.effort and _supports_effort(self.model):
             body["output_config"] = {"effort": request.effort}
         try:
             r = httpx.post(

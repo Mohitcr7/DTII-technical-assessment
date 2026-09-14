@@ -118,7 +118,7 @@ stays labelled HYPOTHESIS; a provider failure trips failover to the local floor.
 FA_LIVE=1 .venv/bin/python -m pytest tests/test_live.py -q -s
 ```
 
-Default hosted model is `claude-opus-5`; override with `FA_ANTHROPIC_MODEL`. Put the
+Default hosted model is `claude-haiku-4-5` (cheap, fast); override with `FA_ANTHROPIC_MODEL=claude-sonnet-5` or `claude-opus-5` for stronger synthesis. Put the
 key in `.env` (gitignored) — `run.sh` loads it. The ordinary test suite strips any
 API keys from its environment so it never spends money.
 
